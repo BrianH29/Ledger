@@ -1,0 +1,36 @@
+//---------------------------------------------------------------------------
+
+#ifndef ObjectH
+#define ObjectH
+//---------------------------------------------------------------------------
+
+class Object{
+
+	private:	// User declarations
+	String date,type, deposit, withdraw, note;
+//	String type;
+//	String deposit;
+//	String withdraw;
+//	String note;
+public:		// User declarations
+	Object();
+	~Object();
+	Object(TDateTime date, String type, String deposit, String withdraw, String note);
+
+	//setter
+	void setDate(TdateTime date);
+	void setType(String type);
+	void setDeposit(String deposit);
+	void setWithdraw(String withdraw);
+	void setNote(String note);
+
+	//getter
+	TDateTime getDate() const;
+	String getType() const;
+	String getDeposit() const
+	String getWithdraw;
+	String getNote() const;
+
+}
+
+#endif

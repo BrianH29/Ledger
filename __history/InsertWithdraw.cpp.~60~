@@ -1,0 +1,102 @@
+//---------------------------------------------------------------------------
+
+#include <vcl.h>
+#pragma hdrstop
+
+#include "InsertWithdraw.h"
+#include "LedgerMain.h"
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+#pragma resource "*.dfm"
+TWithdrawMain *WithdrawMain;
+//---------------------------------------------------------------------------
+__fastcall TWithdrawMain::TWithdrawMain(TComponent* Owner)
+	: TForm(Owner)
+{
+	WithdrawDate->Date = Date();
+}
+//---------------------------------------------------------------------------
+void __fastcall TWithdrawMain::WithdrawInsertClick(TObject *Sender)
+{
+	//input value
+	String wdDate = FormatDateTime("yyyy'년' MM'월' dd'일' dddd", WithdrawDate->Date);
+	String wdType = WithdrawType->Text;
+	double wdAmount = StrToFloat(WithdrawAmount->Text);
+	String wdNote = WithdrawNote ->Text;
+
+	//출금 총합
+//	String withdrawTotal = MainView->WithdrawTotal->Caption;
+//	if(withdrawTotal == "0"){
+//		MainView->WithdrawTotal->Caption = FormatFloat("#,##0",wdAmount);
+//	} else {
+//		//convert 15,000 -> 15000
+//		String originalAmount;
+//
+//
+//		for(int i =1; i <= withdrawTotal.Length(); i++){
+//		   if(withdrawTotal[i] != ','){
+//				originalAmount += withdrawTotal[i];
+//		   }
+//		}
+//		double convertOriginalAmount = StrToFloat(originalAmount);
+//		double total = wdAmount + convertOriginalAmount;
+//		MainView->WithdrawTotal->Caption = FormatFloat("#,##0",total);
+//	}
+
+
+	//convert format 12345 -> 12,345
+	String formatAmount = FormatFloat("#,##0",wdAmount);
+
+	//add to the list
+	TListItem *ListItem;
+	TListItem *Selected = MainView->ListView1->Selected;
+
+	if(Selected){
+		int selectedIdx = Selected->Index;
+		int selectedCaption =StrToInt(Selected->Caption);
+
+		//추가된 이후의 순서들 변경해주기
+		for(int i =0; i<MainView->ListView1->Items->Count; i++){
+			TListItem *item = MainView->ListView1->Items->Item[i];
+			int itemCaption = StrToInt(item->Caption);
+
+			if(itemCaption > selectedCaption){
+//				ShowMessage(item->Caption);
+
+				int newIdx = itemCaption+1;
+				item->Caption = IntToStr(newIdx);
+			}
+
+		}
+
+		//add a new item under the selected row
+	    ListItem = MainView->ListView1->Items->Insert(Selected->Index+1);
+		ListItem->Caption = selectedCaption+1;
+		ListItem->SubItems->Add(wdDate);
+	    ListItem->SubItems->Add(wdType);
+	    ListItem->SubItems->Add("");
+	    ListItem->SubItems->Add(formatAmount);
+		ListItem->SubItems->Add(wdNote);
+
+	} else {
+		//add new item at the end of the list
+	    ListItem = MainView->ListView1->Items->Add();
+		ListItem->Caption = MainView->ListView1->Items->Count;
+		ListItem->SubItems->Add(wdDate);
+	    ListItem->SubItems->Add(wdType);
+	    ListItem->SubItems->Add("");
+	    ListItem->SubItems->Add(formatAmount);
+		ListItem->SubItems->Add(wdNote);
+	}
+
+
+	//close the modal
+	ModalResult = mrOk;
+
+	WithdrawDate->Date = Date();
+	WithdrawType->Text = "";
+	WithdrawAmount->Text = "";
+	WithdrawNote->Text = "";
+}
+//---------------------------------------------------------------------------
+

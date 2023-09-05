@@ -1,0 +1,20 @@
+//---------------------------------------------------------------------------
+
+#ifndef CreateIndexH
+#define CreateIndexH
+
+//---------------------------------------------------------------------------
+
+class CreateIndex {
+ private:
+	int mIndex;
+ public:
+	CreateIndex():mIndex(0){};
+	~CreateIndex();
+
+	void IncreaseIndex();
+	void DecreaseIndex();
+	int &GetIndex();
+};
+
+#endif

@@ -1,0 +1,405 @@
+//---------------------------------------------------------------------------
+
+#include <vcl.h>
+#include <fstream>
+#include <System.StrUtils.hpp>
+#include <System.SysUtils.hpp>
+#include <Vcl.FileCtrl.hpp>
+#include <vector>
+#include <algorithm>
+#pragma hdrstop
+
+#include "LedgerMain.h"
+#include "InsertDeposit.h"
+#include "InsertWithdraw.h"
+#include "EditLedger.h"
+#include "Mixin.h"
+
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+#pragma resource "*.dfm"
+
+TMainView *MainView;
+Mixin *Mixin;
+//---------------------------------------------------------------------------
+__fastcall TMainView::TMainView(TComponent* Owner)
+	: TForm(Owner)
+{
+	for(int i =0; i<ListView1->Columns->Count; i++){
+		TListColumn *column = ListView1->Columns->Items[i];
+		if(i == 0){
+		   column->Width = 50;
+		} else if(i == 1) {
+		 column->Width = 150;
+		} else {
+		   column->Width = 90;
+		}
+		column->AutoSize = false;
+	}
+}
+//---------------------------------------------------------------------------
+// 입금 UI 노출
+void __fastcall TMainView::DepositBtnClick(TObject *Sender)
+{
+	DepositMain->ShowModal();
+	Mixin->totalAmount(ListView1, "deposit");
+
+}
+//---------------------------------------------------------------------------
+
+//편집
+void __fastcall TMainView::EditBtnClick(TObject *Sender)
+{
+   TListItem *list = ListView1->Selected;
+
+   if(list == NULL){
+	ShowMessage("데이터를 선택해주세요");
+   } else {
+
+	String date = list->SubItems->Strings[0];
+	String type = list->SubItems->Strings[1];
+	String deposit = list->SubItems->Strings[2];
+	String withdraw = list->SubItems->Strings[3];
+	String note = list->SubItems->Strings[4];
+
+	String amount = deposit != "" ? deposit : withdraw;
+	String formatAmount;
+
+	//convert format 1,234,555 -> 1234555
+	for(int i=1; i<=amount.Length(); i++){
+	 if(amount[i] != ','){
+		formatAmount += amount[i];
+	 }
+	};
+
+	// 2023년 08월 30일 수요일 -> convert to system date
+	int year, month, day;
+	year = StrToInt(date.SubString(1,4));
+	month = StrToInt(date.SubString(8,1));
+	day = StrToInt(date.SubString(11,2));
+
+	TDateTime dateTime = EncodeDate(year, month, day);
+
+	//편집 화면에 기존 값 노출
+	EditView->Caption = deposit != "" ? "입금" : "출금";
+	EditView->EditDate->Date = dateTime;
+	EditView->EditType->Text = type;
+	EditView->EditAmount->Text = formatAmount;
+	EditView->EditNote->Text = note;
+
+	EditView->ShowModal();
+
+	if(deposit != "")
+		Mixin->totalAmount(ListView1, "deposit");
+	else
+		Mixin->totalAmount(ListView1, "withdraw");
+
+   }
+
+
+
+}
+//---------------------------------------------------------------------------
+
+//출금 UI 노출
+void __fastcall TMainView::WithdrawBtnClick(TObject *Sender)
+{
+	  WithdrawMain->ShowModal();
+	  Mixin->totalAmount(ListView1, "withdraw");
+}
+//---------------------------------------------------------------------------
+
+// 삭제
+void __fastcall TMainView::DeleteBtnClick(TObject *Sender){
+	TListItem *Selected = ListView1->Selected;
+
+    if (Selected == NULL)
+    {
+        ShowMessage("데이터를 선택해주세요");
+    }
+    else
+    {
+		int selectedIdx = Selected->Index;
+		int selectedCaption = StrToInt(Selected->Caption);
+
+		// 삭제한 순서 뒷 번호들 수정
+		for (int i = 0; i < ListView1->Items->Count; i++)
+		{
+            TListItem *item = ListView1->Items->Item[i];
+			int itemCaption = StrToInt(item->Caption);
+
+			if(itemCaption > selectedCaption){
+				int newIdx = itemCaption-1;
+
+				//순서 업데이트
+				item->Caption = IntToStr(newIdx);
+			}
+		}
+
+        Mixin->totalAmount(ListView1, "delete");
+		Selected->Delete();
+    }
+}
+//---------------------------------------------------------------------------
+
+// 파일로 내보내기
+void __fastcall TMainView::ConvertToExcelClick(TObject *Sender)
+{
+    int count = ListView1->Items->Count;
+
+    if (count == 0) {
+        ShowMessage("There is no record that has been listed");
+    }
+    else {
+		std::unique_ptr<TStringList> pList(new TStringList);
+        String sTemp;
+
+		//헤더
+		pList->Add("순서,날짜, 분류, 입금, 출금, 비고");
+
+		std::unique_ptr<TSaveDialog> SaveDialog(new TSaveDialog(this));
+		SaveDialog->Filter = "CSV Files (*.csv)|*.csv";
+		SaveDialog->DefaultExt = "csv";
+
+        if (SaveDialog->Execute()) {
+			// Get the selected file name
+			String FileName = SaveDialog->FileName;
+
+            for (int i = 0; i < count; i++) {
+				TListItem* ListItem = ListView1->Items->Item[i];
+                sTemp = ListItem->Caption + ",";
+
+                for (int j = 0; j < ListItem->SubItems->Count; ++j) {
+                    String SubItem = ListItem->SubItems->Strings[j];
+
+                    // Check if the SubItem is a money value with commas
+                    if (SubItem.Pos(",")) {
+                        // Remove commas and convert to numeric format
+                        SubItem = StringReplace(SubItem, ",", "", TReplaceFlags() << rfReplaceAll);
+                    }
+
+                    sTemp += SubItem;
+
+                    // Add a comma unless it's the last subitem
+                    if (j < ListItem->SubItems->Count - 1) {
+                        sTemp += ",";
+                    }
+                }
+				pList->Add(sTemp);
+            }
+
+            // Save to the selected file
+			pList->SaveToFile(FileName);
+            ShowMessage("Saved successful");
+        }
+	}
+}
+//---------------------------------------------------------------------------
+
+// 파일 불러오기
+void __fastcall TMainView::openClick(TObject *Sender)
+{
+
+	std::unique_ptr<TOpenDialog> OpenDialog(new TOpenDialog(this));
+    OpenDialog->Title = "Open CSV File";
+    OpenDialog->Filter = "CSV Files (*.csv)|*.csv";
+
+    if (OpenDialog->Execute()) {
+        String FileName = OpenDialog->FileName;
+
+	   	std::unique_ptr<TStringList> pList(new TStringList);
+		TStringDynArray Values;
+
+        pList->LoadFromFile(FileName);
+
+        ListView1->Clear();
+
+        if (pList->Count > 0) {
+            for (int i = 1; i < pList->Count; i++) {
+                TListItem *ListItem = ListView1->Items->Add();
+                Values = SplitString(pList->Strings[i], ",");
+
+                for (int j = 0; j < Values.Length; ++j) {
+                    if (j == 0)
+                        ListItem->Caption = Values[j];
+                    else if ((j == 3 || j == 4) && Values[j] != "") {
+                        try {
+                            ListItem->SubItems->Add(FormatFloat("#,##0", StrToFloat(Values[j])));
+                        }
+                        catch (...) {
+                            ListItem->SubItems->Add(Values[j]);
+                        }
+                    }
+                    else {
+                        ListItem->SubItems->Add(Values[j]);
+                    }
+                }
+			}
+
+		  Mixin->totalAmount(ListView1, "openFile");
+		} else {
+            ShowMessage("There is no data to load");
+        }
+
+	}//end of if
+
+
+
+}
+//---------------------------------------------------------------------------
+
+bool __fastcall CompareDates(TListItem* Item1, TListItem* Item2)
+{
+	String date = Item1->SubItems->Strings[0];
+	String date2 = Item2->SubItems->Strings[0];
+
+// 2023년 08월 30일 수요일 -> convert to system date
+	int year, month, day;
+	year = StrToInt(date.SubString(1,4));
+	month = StrToInt(date.SubString(8,1));
+	day = StrToInt(date.SubString(11,2));
+
+	int year2, month2, day2;
+	year2 = StrToInt(date2.SubString(1,4));
+	month2 = StrToInt(date2.SubString(8,1));
+	day2 = StrToInt(date2.SubString(11,2));
+
+	TDateTime dateTime = EncodeDate(year, month, day);
+	TDateTime dateTime2 = EncodeDate(year2, month2, day2);
+
+	TDateTime Date1 = StrToDate(dateTime);
+	TDateTime Date2 = StrToDate(dateTime2);
+
+	return Date1<Date2;
+}
+
+
+//---------------------------------------------------------------------------
+
+//날짜 정렬
+void __fastcall SortByDates(TListView* ListView1)
+{
+	std::vector<TListItem> newItem;
+
+	// copy items to the vector
+	for (int i = 0; i < ListView1->Items->Count; i++)
+	{
+//		TListItem* newItemCopy = new TListItem(ListView1->Items);
+		std::unique_ptr<TListItem> newItemCopy(new TListItem(ListView1->Items));
+		newItemCopy->Assign(ListView1->Items->Item[i]); // Copy the properties
+
+		newItem.push_back(newItemCopy);
+	}
+
+	//clear list
+	ListView1->Items->Clear();
+
+	// sort the vector based on dates
+	std::sort(newItem.begin(), newItem.end(), CompareDates);
+
+
+	// add items back in sorted order
+	 for(int i=0; i<newItem.size(); i++){
+		TListItem* ListItem = ListView1->Items->Add();
+		TListItem* item = newItem[i];
+		ListItem->Assign(item);
+	  }
+
+}
+
+
+//---------------------------------------------------------------------------
+ bool CompareNumber(TListItem* Item1, TListItem* Item2) {
+
+   int first = StrToInt(Item1->Caption);
+   int second = StrToInt(Item2->Caption);
+
+   return first < second;
+ }
+
+//---------------------------------------------------------------------------
+//날짜 정렬
+void __fastcall SortByNumber(TListView* ListView1)
+{
+	std::vector<TListItem*> newItem;
+
+	// copy items to the vector
+	for (int i = 0; i < ListView1->Items->Count; i++)
+	{
+		TListItem* newItemCopy = new TListItem(ListView1->Items);
+		newItemCopy->Assign(ListView1->Items->Item[i]);
+
+		newItem.push_back(newItemCopy);
+	}
+
+	//clear list
+	ListView1->Items->Clear();
+
+	// sort the vector based on dates
+	std::sort(newItem.begin(), newItem.end(), CompareNumber);
+
+
+	// add items back in sorted order
+	 for(int i=0; i<newItem.size(); i++){
+		TListItem* ListItem = ListView1->Items->Add();
+		TListItem* item = newItem[i];
+		ListItem->Assign(item);
+	  }
+}
+//---------------------------------------------------------------------------
+
+//컬럼 클릭시 정렬
+void __fastcall TMainView::ListView1ColumnClick(TObject *Sender, TListColumn *Column)
+
+{
+	//선택 컬럼 인덱스
+	int idx = Column->Index;
+
+	if(idx == 3 || idx == 4){
+
+	  std::vector<TListItem*> EmptyItem;
+	  std::vector<int> ToDelete;
+
+	  //listview 데이터 길이
+	  int count = ListView1->Items->Count;
+
+	  for(int i=0; i<count; i++){
+		TListItem *list = ListView1->Items->Item[i];
+
+		if(list->SubItems->Strings[idx-1] == ""){
+
+			//뒤로 움직일 데이터 담을 데이터
+			EmptyItem.push_back(list);
+
+			//리스트에서 제거할 데이터 인덱스
+			ToDelete.push_back(i);
+		}
+	  }
+
+
+	  //데이터 추가하기
+	  for(int i=0; i<EmptyItem.size(); i++){
+		TListItem* item = EmptyItem[i];
+		TListItem* ListItem = ListView1->Items->Add();
+		ListItem->Assign(item);
+	  }
+
+	  //데이터 삭제하기
+	  for(int i = ToDelete.size() - 1; i >= 0; i--){
+		ListView1->Items->Delete(ToDelete[i]);
+	  }
+
+      ToDelete.clear();
+	  EmptyItem.clear();
+	  } else if (idx == 0) {
+	  	//날짜 컬럼 클릭시
+		SortByNumber(ListView1);
+	  }  else if (idx == 1) {
+	  	//날짜 컬럼 클릭시
+		Mixin->SortByDates(ListView1);
+	  }
+}
+//---------------------------------------------------------------------------
+
+
+

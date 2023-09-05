@@ -1,0 +1,55 @@
+//---------------------------------------------------------------------------
+
+#pragma hdrstop
+
+#include "Object.h"
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+
+Object::Object(TDateTme date, String type, String deposit, String withdraw, String note){
+	this.date = date;
+	this.type = type;
+	this.deposit = deposit;
+	this.withdraw = withdraw;
+	this.note = note;
+}
+
+void Object::setDate(String date){
+	this.date = date;
+}
+
+void Object::setType(String type){
+	this.type = type;
+}
+
+void Object::setDeposit(String deposit){
+	this.deposit = deposit;
+}
+
+void Object::setWithdraw(String withdraw){
+	this.withdraw = withdraw;
+}
+
+void Object::setNote(String note){
+	this.note = note;
+}
+
+String Object::getDate() const{
+	return this.date;
+}
+
+String Object::getType() const{
+	return this.type;
+}
+
+String Object::getDeposit() const{
+	return this.deposit;
+}
+
+String Object::getWithdraw() const{
+	return this.withdraw;
+}
+
+String Object::getNote() const{
+	return this.note;
+}
